@@ -30,4 +30,5 @@ python .\jeopardy_parser\clues.py
 ```
 
 ## TODO
+- Keep track of games downloaded in order to skip downloaded files in future download
 - Add cli and options to download a subset of games
