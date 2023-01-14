@@ -1,6 +1,6 @@
 # jeopardy-parser
 
-Parse Jeopardy clues and answers from J! Archive. A csv file will be outputted for each game.
+Parse Jeopardy clues and answers from [J! Archive](https://j-archive.com/). A csv file will be outputted for each game.
 
 ## Installation
 
