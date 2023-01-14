@@ -21,7 +21,7 @@ python .\jeopardy_parser\seasons.py
 then run the following to get clues.
 
 ```
-python .\jeopardy_parser\seasons.py
+python .\jeopardy_parser\clues.py
 ```
 
 ## TODO
