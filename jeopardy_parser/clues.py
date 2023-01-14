@@ -3,12 +3,14 @@ import json
 import logging
 import re
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 import aiohttp
 import pandas as pd
 from attrs import asdict, define
 from helpers import (
     config_logger,
+    create_directory,
     stringify_contents_with_newline,
     to_lower_underscore,
 )
@@ -23,10 +25,54 @@ class Clue:
     category: str
     category_comment: str
     value: str
+    daily_double: bool
     clue: str
     correct_response: str
     clue_id: str
     url: str
+
+
+def get_jarchive_game_id(url: str) -> str:
+    return parse_qs(urlparse(url).query)["game_id"][-1]
+
+
+def list_game_ids_in_dir(path: str) -> list[str]:
+    """Get a list of game ids in directory.
+    E.g., "2022-10-16-4-primetime_celebrity_jeopardy-7472-output.csv"
+    "2023-01-05-9-primetime_celebrity_jeopardy-7635-output.csv"
+
+    Returns ["7472", "7635"]
+
+    Args:
+        path (str): Path to directory
+
+    Returns:
+        list[str]: List of game ids in directory
+    """
+    p = Path(path)
+    files = list(p.iterdir())
+    game_ids = [f.stem.split("-")[-2] for f in files if f.suffix == ".csv"]
+    return game_ids
+
+
+def is_in_dir(game_id: str, path: str) -> bool:
+    game_ids = list_game_ids_in_dir(path)
+    return True if game_id in game_ids else False
+
+
+def is_daily_double(clue_value: str) -> bool:
+    """Checks if the clue is a Daily Double. Check's clue_value text.
+
+    Args:
+        clue_value (str): clue_value text.
+
+    Returns:
+        bool: True if Daily Double else False.
+    """
+    if re.match(r"DD", clue_value) is None:
+        return False
+    else:
+        return True
 
 
 def get_category(clue_id: str, categories: dict[str, list[tuple]]) -> tuple:
@@ -61,12 +107,24 @@ def get_category(clue_id: str, categories: dict[str, list[tuple]]) -> tuple:
             return categories["final_jeopardy_round"][0]
 
 
-async def get_clues(name, work_queue):
+async def get_clues(name: str, work_queue, path: str):
     async with aiohttp.ClientSession() as session:
         while not work_queue.empty():
             season_url = await work_queue.get()
             logging.info(f"Task {name} getting {season_url[0]}: {season_url[1]}")
             print(f"Task {name} getting {season_url[0]}: {season_url[1]}")
+
+            game_id = get_jarchive_game_id(season_url[1])
+
+            # Skip if game is in output directory
+            if is_in_dir(game_id, path):
+                logging.info(
+                    f"J! Archive game id alread exists: {game_id}. Skipping {season_url[1]}"
+                )
+                print(
+                    f"J! Archive game id alread exists: {game_id}. Skipping {season_url[1]}"
+                )
+                continue
 
             async with session.get(season_url[1]) as response:
                 html = await response.text()
@@ -133,6 +191,16 @@ async def get_clues(name, work_queue):
                             ".//td[contains(@class, 'clue_value')]/text()"
                         ).get()
 
+                        # If there is no value, assume it is not a daily double
+                        if clue_value is None:
+                            daily_double = False
+                        else:
+                            # Check if clue is a daily double
+                            daily_double = is_daily_double(clue_value)
+
+                            # Clean clue value; remove DD and any white space
+                            clue_value = re.sub(r"DD:", "", clue_value).strip()
+
                         # Get response
                         # Response is added when an onmouseover event occurs
                         # Regex pattern to get response
@@ -164,6 +232,7 @@ async def get_clues(name, work_queue):
                             category=get_category(clue_id, categories)[0],
                             category_comment=get_category(clue_id, categories)[1],
                             value=clue_value,
+                            daily_double=daily_double,
                             clue=clue_text,
                             correct_response=correct_response_text,
                             clue_id=clue_id,
@@ -177,11 +246,9 @@ async def get_clues(name, work_queue):
             # TODO: use csv module instead of pandas
             df = pd.DataFrame.from_records([asdict(clue) for clue in clues])
 
-            p = Path(__file__).parents[1] / "output"
+            p = Path(path)
 
-            file = (
-                f"{air_date}-{show_num}-{to_lower_underscore(season_url[0])}_output.csv"
-            )
+            file = f"{air_date}-{show_num}-{to_lower_underscore(season_url[0])}-{game_id}-output.csv"
 
             df.to_csv(p / file, index=False)
 
@@ -190,11 +257,16 @@ async def get_clues(name, work_queue):
 
 async def main():
     p = Path(__file__)
+    output_path = p.parents[1] / "output"
 
     # Setup logger
     config_logger(p.parents[1] / f"_jeopardy_{p.stem}.log")
 
+    # Create output directory
+    create_directory(output_path)
+
     # List of 2-tuples
+    # (season title, game url)
     season_urls = []
 
     # Get game urls
@@ -213,9 +285,9 @@ async def main():
 
     # Run the tasks
     await asyncio.gather(
-        asyncio.create_task(get_clues("One", work_queue)),
-        asyncio.create_task(get_clues("Two", work_queue)),
-        asyncio.create_task(get_clues("Three", work_queue)),
+        asyncio.create_task(get_clues("One", work_queue, output_path)),
+        asyncio.create_task(get_clues("Two", work_queue, output_path)),
+        asyncio.create_task(get_clues("Three", work_queue, output_path)),
     )
 
 

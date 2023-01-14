@@ -1,6 +1,6 @@
 # jeopardy-parser
 
-Parse Jeopardy clues and answers from [J! Archive](https://j-archive.com/). A csv file will be outputted for each game.
+Parse Jeopardy clues and answers from [J! Archive](https://j-archive.com/). A csv file will be outputted for each game in an `output` directory.
 
 ## Installation
 
@@ -10,25 +10,23 @@ pip install -r requirements.txt
 
 ## Usage
 
-Clone repo, change to project directory, and make an `output` directory...
+Clone repo and change to project directory...
 
 ```
 cd .\jeopardy-parser\
-mkdir output
 ```
 
-Run the following to get seasons and create `_metadata.json` that includes games by season...
+Run `seasons.py` to get seasons and create `_metadata.json` that includes games by season...
 
 ```
 python .\jeopardy_parser\seasons.py
 ```
 
-then run the following to get clues.
+then run `clues.py` to get all clues for a game in a csv file.
 
 ```
 python .\jeopardy_parser\clues.py
 ```
 
 ## TODO
-- Keep track of games downloaded in order to skip downloaded files in future download
 - Add cli and options to download a subset of games

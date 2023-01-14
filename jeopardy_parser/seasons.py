@@ -6,7 +6,7 @@ from pathlib import Path
 
 import requests
 from attrs import asdict, define, field
-from helpers import config_logger, stringify_contents
+from helpers import config_logger
 from parsel import Selector
 from tqdm import tqdm
 
@@ -26,8 +26,8 @@ class Season:
 
 @define
 class Metadata:
-    title: str = "Jeopardy clue and answers from J! Archive"
-    url: str = "https://j-archive.com/"
+    title: str = r"Jeopardy clue and answers from J! Archive"
+    url: str = r"https://j-archive.com/"
     seasons: list[Season] = None
     accessed_at: str = field(init=False)
 
@@ -41,6 +41,7 @@ class Metadata:
 
 
 def get_seasons_urls() -> dict[str, str]:
+    logging.info("Get url for each season landing page...")
     # Url for all seasons
     LIST_SEASONS_URL = r"https://j-archive.com/listseasons.php"
 
@@ -55,11 +56,12 @@ def get_seasons_urls() -> dict[str, str]:
 
     # Stringify the contents of each a tag
     for a_selector in a_selectors:
-        link_text = stringify_contents(a_selector.get(), "a")
+        # link_text = stringify_contents(a_selector.get(), "a")
+        link_text = Selector(a_selector.get()).xpath("string()").get()
         if link_text not in ["[current season]", "[last season]"]:
-            all_seasons_urls[
-                link_text
-            ] = f"https://j-archive.com/{a_selector.attrib['href']}"
+            href = a_selector.attrib["href"]
+            all_seasons_urls[link_text] = f"https://j-archive.com/{href}"
+            logging.info(f"a_text={link_text}, href={href}")
 
     return all_seasons_urls
 

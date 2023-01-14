@@ -1,5 +1,6 @@
 import logging
 import re
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -13,7 +14,7 @@ def to_lower_underscore(s: str) -> str:
 
     Returns:
         str: Lowercased alphanumeric string with underscores
-    """    
+    """
     # Replace white space with underscore
     new_s = re.sub(r"\s+", "_", s.strip())
 
@@ -63,3 +64,8 @@ def config_logger(path: str) -> None:
         filename=path,
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     )
+
+
+def create_directory(path: str) -> None:
+    p = Path(path)
+    p.mkdir(parents=True, exist_ok=True)
