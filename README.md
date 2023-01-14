@@ -10,7 +10,12 @@ pip install -r requirements.txt
 
 ## Usage
 
-Clone repo, cd into project...
+Clone repo, change to project directory, and make an `output` directory...
+
+```
+cd .\jeopardy-parser\
+mkdir output
+```
 
 Run the following to get seasons and create `_metadata.json` that includes games by season...
 
