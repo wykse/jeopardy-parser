@@ -55,11 +55,6 @@ def list_game_ids_in_dir(path: str) -> list[str]:
     return game_ids
 
 
-def is_in_dir(game_id: str, path: str) -> bool:
-    game_ids = list_game_ids_in_dir(path)
-    return True if game_id in game_ids else False
-
-
 def is_daily_double(clue_value: str) -> bool:
     """Checks if the clue is a Daily Double. Check's clue_value text.
 
@@ -111,22 +106,12 @@ async def get_clues(name: str, work_queue, path: str):
     async with aiohttp.ClientSession() as session:
         while not work_queue.empty():
             season_url = await work_queue.get()
-            logging.info(f"Task {name} getting {season_url[0]}: {season_url[1]}")
-            print(f"Task {name} getting {season_url[0]}: {season_url[1]}")
+            logging.info(
+                f"Task {name} getting {season_url['season']}: {season_url['url']}"
+            )
+            print(f"Task {name} getting {season_url['season']}: {season_url['url']}")
 
-            game_id = get_jarchive_game_id(season_url[1])
-
-            # Skip if game is in output directory
-            if is_in_dir(game_id, path):
-                logging.info(
-                    f"J! Archive game id alread exists: {game_id}. Skipping {season_url[1]}"
-                )
-                print(
-                    f"J! Archive game id alread exists: {game_id}. Skipping {season_url[1]}"
-                )
-                continue
-
-            async with session.get(season_url[1]) as response:
+            async with session.get(season_url["url"]) as response:
                 html = await response.text()
 
                 selector = Selector(html)
@@ -248,7 +233,7 @@ async def get_clues(name: str, work_queue, path: str):
 
             p = Path(path)
 
-            file = f"{air_date}-{show_num}-{to_lower_underscore(season_url[0])}-{game_id}-output.csv"
+            file = f"{air_date}-{show_num}-{to_lower_underscore(season_url['season'])}-{get_jarchive_game_id(season_url['url'])}-output.csv"
 
             df.to_csv(p / file, index=False)
 
@@ -261,27 +246,45 @@ async def main():
 
     # Setup logger
     config_logger(p.parents[1] / f"_jeopardy_{p.stem}.log")
+    logging.info(f"Starting {p.name}")
 
     # Create output directory
     create_directory(output_path)
 
-    # List of 2-tuples
-    # (season title, game url)
-    season_urls = []
+    # Key game id, value is season and url
+    game_urls: dict[dict[str, str]] = {}
 
     # Get game urls
     with open(p.parents[1] / "_metadata.json", "r") as f:
         metadata = json.load(f)
         for season in metadata["seasons"]:
             for url in season["game_urls"]:
-                season_urls.append((season["title"], url))
+                game_urls[get_jarchive_game_id(url)] = {
+                    "season": season["title"],
+                    "url": url,
+                }
+
+    # Game ids of the game urls
+    gid_from_urls = set(game_urls.keys())
+
+    # Game ids of the files already in output dir
+    gids_from_dir = set(list_game_ids_in_dir(output_path))
+
+    # Game ids of the game urls not already downloaded, i.e., download these games
+    gids_to_download = gid_from_urls - gids_from_dir
+
+    print(f"Getting clues for {len(gids_to_download)} game ids: {gids_to_download}")
+
+    logging.info(
+        f"Getting clues for {len(gids_to_download)} game ids: {gids_to_download}"
+    )
 
     # Create the queue of work
     work_queue = asyncio.Queue()
 
-    # Put work in the queue
-    for url in season_urls:
-        await work_queue.put(url)
+    # Put gids to download in the queue
+    for gid in gids_to_download:
+        await work_queue.put(game_urls[gid])
 
     # Run the tasks
     await asyncio.gather(
